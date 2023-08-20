@@ -1,8 +1,9 @@
 LOCAL_PATH := $(call my-dir)
-LIBION_HEADER_PATH_WRAPPER := $(QC_OPEN_PATH)/core-utils/build/libion_header_paths/libion_path.mk
 
 include $(CLEAR_VARS)
-include $(LIBION_HEADER_PATH_WRAPPER)
+
+LIBION_HEADER_PATHS = system/memory/libion/include \
+                      system/memory/libion/kernel-headers
 
 # ---------------------------------------------------------------------------------
 # 				Common definitons
@@ -113,7 +114,7 @@ LOCAL_HEADER_LIBRARIES := \
         libnativebase_headers \
         libutils_headers \
         libhardware_headers \
-        display_intf_headers
+        display_headers
 
 LOCAL_C_INCLUDES                += $(libmm-vdec-inc)
 LOCAL_ADDITIONAL_DEPENDENCIES   := $(libmm-vdec-add-dep)
@@ -159,7 +160,7 @@ LOCAL_HEADER_LIBRARIES := \
         libnativebase_headers \
         libutils_headers \
         libhardware_headers \
-        display_intf_headers
+        display_headers
 
 LOCAL_C_INCLUDES              += $(libmm-vdec-inc)
 LOCAL_ADDITIONAL_DEPENDENCIES := $(libmm-vdec-add-dep)
