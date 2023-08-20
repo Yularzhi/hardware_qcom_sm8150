@@ -1,10 +1,8 @@
 ROOT_DIR := $(call my-dir)
+LIBION_HEADER_PATH_WRAPPER := $(QC_OPEN_PATH)/core-utils/build/libion_header_paths/libion_path.mk
 
 include $(CLEAR_VARS)
-
-LIBION_HEADER_PATHS = system/memory/libion/include \
-                      system/memory/libion/kernel-headers
-
+include $(LIBION_HEADER_PATH_WRAPPER)
 LOCAL_PATH:= $(ROOT_DIR)
 
 # ---------------------------------------------------------------------------------

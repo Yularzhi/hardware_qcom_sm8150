@@ -1,10 +1,9 @@
 # Gralloc module
 LOCAL_PATH := $(call my-dir)
-
-LIBION_HEADER_PATHS = system/memory/libion/include \
-                      system/memory/libion/kernel-headers
+LIBION_HEADER_PATH_WRAPPER := $(QC_OPEN_PATH)/core-utils/build/libion_header_paths/libion_path.mk
 
 include $(LOCAL_PATH)/../common.mk
+include $(LIBION_HEADER_PATH_WRAPPER)
 include $(CLEAR_VARS)
 
 LOCAL_MODULE                  := gralloc.$(TARGET_BOARD_PLATFORM)
@@ -23,7 +22,7 @@ LOCAL_SHARED_LIBRARIES        := $(common_libs) libqdMetaData libsync libgralloc
                                  android.hardware.graphics.mapper@2.1 \
                                  android.hardware.graphics.mapper@3.0 \
                                  android.hardware.graphics.mapper@4.0
-LOCAL_CFLAGS                  := $(common_flags) -DLOG_TAG=\"qdgralloc\" -Wno-sign-conversion \
+LOCAL_CFLAGS                  := $(common_flags) -DLOG_TAG=\"qdgralloc\" -Wall -Werror \
                                  -D__QTI_DISPLAY_GRALLOC__
 LOCAL_CLANG                   := true
 LOCAL_ADDITIONAL_DEPENDENCIES := $(common_deps)
@@ -153,7 +152,7 @@ LOCAL_SHARED_LIBRARIES        := $(common_libs) \
                                  android.hardware.graphics.allocator@3.0 \
                                  vendor.qti.hardware.display.mapperextensions@1.0 \
                                  vendor.qti.hardware.display.mapperextensions@1.1
-LOCAL_CFLAGS                  := -DLOG_TAG=\"qdgralloc\" $(common_flags) -Wno-sign-conversion
+LOCAL_CFLAGS                  := -DLOG_TAG=\"qdgralloc\" $(common_flags)
 ifneq ($(TARGET_USES_GRALLOC4),false)
 LOCAL_CFLAGS                  += -DTARGET_USES_GRALLOC4
 endif
