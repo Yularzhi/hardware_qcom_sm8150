@@ -1,9 +1,6 @@
 LOCAL_PATH := $(call my-dir)
-
 include $(CLEAR_VARS)
-
-LIBION_HEADER_PATHS = system/memory/libion/include \
-                      system/memory/libion/kernel-headers
+include $(LIBION_HEADER_PATH_WRAPPER)
 
 # ---------------------------------------------------------------------------------
 # 				Common definitons
@@ -32,7 +29,7 @@ TARGETS_THAT_DONT_SUPPORT_SW_VENC_720P = atoll
 TARGETS_THAT_NEED_SW_VENC_HEVC := msm8992
 TARGETS_THAT_SUPPORT_VQZIP := msm8996 msm8998
 
-ifneq (,$(call is-board-platform-in-list2, $(TARGETS_THAT_DONT_SUPPORT_SW_VENC_720P)))
+ifeq ($(call is-board-platform-in-list, $(TARGETS_THAT_DONT_SUPPORT_SW_VENC_720P)),true)
 libmm-venc-def += -DDISABLE_720P
 endif
 
@@ -42,11 +39,15 @@ endif
 
 libmm-venc-def += -D_UBWC_
 
-ifneq (,$(call is-board-platform-in-list2, $(TARGETS_THAT_SUPPORT_VQZIP)))
+ifeq ($(TARGET_DISABLED_UBWC),true)
+libmm-venc-def += -DDISABLE_UBWC
+endif
+
+ifeq ($(call is-board-platform-in-list, $(TARGETS_THAT_SUPPORT_VQZIP)),true)
 libmm-venc-def += -D_VQZIP_
 endif
 
-ifneq (,$(call is-board-platform-in-list2, $(TARGETS_THAT_USE_FLAG_MSM8226)))
+ifeq ($(call is-board-platform-in-list, $(TARGETS_THAT_USE_FLAG_MSM8226)),true)
 libmm-venc-def += -D_MSM8226_
 endif
 
@@ -56,7 +57,7 @@ endif
 
 libmm-venc-def += -DUSE_NATIVE_HANDLE_SOURCE
 
-ifneq (,$(call is-board-platform-in-list2, $(MASTER_SIDE_CP_TARGET_LIST)))
+ifeq ($(call is-board-platform-in-list, $(MASTER_SIDE_CP_TARGET_LIST)),true)
 libmm-venc-def += -DMASTER_SIDE_CP
 endif
 
@@ -69,12 +70,12 @@ endif
 # Common Includes
 libmm-venc-inc      := $(LOCAL_PATH)/inc
 libmm-venc-inc      += $(LIBION_HEADER_PATHS)
-libmm-venc-inc      += $(QCOM_MEDIA_ROOT)/mm-video-v4l2/vidc/common/inc
-libmm-venc-inc      += $(QCOM_MEDIA_ROOT)/mm-core/inc
-libmm-venc-inc      += $(QCOM_MEDIA_ROOT)/libstagefrighthw
-libmm-venc-inc      += $(QCOM_MEDIA_ROOT)/libplatformconfig
-libmm-venc-inc      += $(QCOM_MEDIA_ROOT)/libc2dcolorconvert
+libmm-venc-inc      += $(call project-path-for,qcom-media)/mm-video-v4l2/vidc/common/inc
+libmm-venc-inc      += $(call project-path-for,qcom-media)/mm-core/inc
+libmm-venc-inc      += $(call project-path-for,qcom-media)/libstagefrighthw
+libmm-venc-inc      += $(call project-path-for,qcom-media)/libplatformconfig
 libmm-venc-inc      += $(TARGET_OUT_HEADERS)/adreno
+libmm-venc-inc      += $(call project-path-for,qcom-media)/libc2dcolorconvert
 libmm-venc-inc      += $(TARGET_OUT_HEADERS)/libvqzip
 libmm-venc-inc      += $(TARGET_OUT_INTERMEDIATES)/KERNEL_OBJ/usr/include
 libmm-venc-inc      += $(TOP)/frameworks/native/libs/nativewindow/include
@@ -82,10 +83,10 @@ libmm-venc-inc      += $(TOP)/frameworks/native/libs/nativebase/include
 libmm-venc-inc      += $(TOP)/frameworks/native/libs/arect/include
 
 ifeq ($(ENABLE_HYP),true)
-libmm-venc-inc      += hardware/qcom/media/hypv-intercept
+libmm-venc-inc      += $(call project-path-for,qcom-media)/hypv-intercept
 endif
 
-ifeq (,$(call is-board-platform-in-list2, $(TARGETS_THAT_DONT_SUPPORT_SW_VENC_ROTATION)))
+ifneq ($(call is-board-platform-in-list, $(TARGETS_THAT_DONT_SUPPORT_SW_VENC_ROTATION)),true)
 libmm-venc-inc      += hardware/libhardware/include/hardware
 endif
 
@@ -99,9 +100,6 @@ libmm-venc-add-dep  := $(TARGET_OUT_INTERMEDIATES)/KERNEL_OBJ/usr
 include $(CLEAR_VARS)
 
 LOCAL_MODULE                    := libOmxVenc
-LOCAL_LICENSE_KINDS             := SPDX-license-identifier-BSD
-LOCAL_LICENSE_CONDITIONS        := notice
-LOCAL_NOTICE_FILE               := $(LOCAL_PATH)/../../../LICENSE
 LOCAL_MODULE_TAGS               := optional
 LOCAL_VENDOR_MODULE             := true
 LOCAL_CFLAGS                    := $(libmm-venc-def)
@@ -119,7 +117,6 @@ LOCAL_ADDITIONAL_DEPENDENCIES   := $(libmm-venc-add-dep)
 
 LOCAL_PRELINK_MODULE      := false
 LOCAL_SHARED_LIBRARIES    := liblog libcutils libdl libplatformconfig libion
-LOCAL_SHARED_LIBRARIES    += libnativewindow
 
 # ifeq ($(BOARD_USES_ADRENO), true)
 LOCAL_SHARED_LIBRARIES    += libc2dcolorconvert
@@ -134,24 +131,19 @@ LOCAL_SRC_FILES   := src/omx_video_base.cpp
 LOCAL_SRC_FILES   += src/omx_video_encoder.cpp
 LOCAL_SRC_FILES   += src/video_encoder_device_v4l2.cpp
 
-# Suppress warnings until they are fixed in video_encoder_device_v4l2.cpp
-LOCAL_CFLAGS += -Wno-error=implicit-fallthrough
-
 include $(BUILD_SHARED_LIBRARY)
 
-ifeq (,$(call is-board-platform-in-list2, $(TARGETS_THAT_DONT_NEED_SW_VENC_MPEG4)))
+ifneq ($(call is-board-platform-in-list, $(TARGETS_THAT_DONT_NEED_SW_VENC_MPEG4)),true)
 # ---------------------------------------------------------------------------------
 # 			Make the Shared library (libOmxSwVencMpeg4)
 # ---------------------------------------------------------------------------------
 
+ifneq ($(QCPATH),)
 include $(CLEAR_VARS)
 
 libmm-venc-inc      += $(TARGET_OUT_HEADERS)/mm-video/swvenc
 
 LOCAL_MODULE                    := libOmxSwVencMpeg4
-LOCAL_LICENSE_KINDS             := SPDX-license-identifier-BSD
-LOCAL_LICENSE_CONDITIONS        := notice
-LOCAL_NOTICE_FILE               := $(LOCAL_PATH)/../../../LICENSE
 
 LOCAL_MODULE_TAGS               := optional
 LOCAL_VENDOR_MODULE             := true
@@ -171,9 +163,8 @@ LOCAL_PRELINK_MODULE      := false
 LOCAL_SHARED_LIBRARIES    := liblog libcutils libdl libplatformconfig libion
 LOCAL_SHARED_LIBRARIES    += libMpeg4SwEncoder
 LOCAL_SHARED_LIBRARIES    += libqdMetaData
-LOCAL_SHARED_LIBRARIES    += libnativewindow
 
-ifeq (,$(call is-board-platform-in-list2, $(TARGETS_THAT_DONT_SUPPORT_SW_VENC_ROTATION)))
+ifneq ($(call is-board-platform-in-list, $(TARGETS_THAT_DONT_SUPPORT_SW_VENC_ROTATION)),true)
 LOCAL_SHARED_LIBRARIES += libui
 LOCAL_SHARED_LIBRARIES += libutils
 endif
@@ -187,6 +178,7 @@ LOCAL_SRC_FILES   := src/omx_video_base.cpp
 LOCAL_SRC_FILES   += src/omx_swvenc_mpeg4.cpp
 
 include $(BUILD_SHARED_LIBRARY)
+endif # QCPATH
 endif
 
 

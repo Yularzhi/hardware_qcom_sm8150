@@ -180,7 +180,7 @@ venc_dev::venc_dev(class omx_venc *venc_class)
     memset(&vqzip_sei_info, 0, sizeof(vqzip_sei_info));
     memset(&ltrinfo, 0, sizeof(ltrinfo));
     memset(&fd_list, 0, sizeof(fd_list));
-    sess_priority.priority = 1;
+    sess_priority.priority = 0;
     operating_rate = 30;
     memset(&color_space, 0x0, sizeof(color_space));
     memset(&temporal_layers_config, 0x0, sizeof(temporal_layers_config));
@@ -193,6 +193,7 @@ venc_dev::venc_dev(class omx_venc *venc_class)
     mIsNativeRecorder = false;
     m_hdr10meta_enabled = false;
     hdr10metadata_supported = false;
+    is_hevcprofile_explicitly_set = false;
 
     Platform::Config::getInt32(Platform::vidc_enc_log_in,
             (int32_t *)&m_debug.in_buffer_log, 0);
@@ -1169,9 +1170,10 @@ OMX_ERRORTYPE venc_dev::venc_get_supported_profile_level(OMX_VIDEO_PARAM_PROFILE
                             QOMX_VIDEO_AVCProfileMain,
                             QOMX_VIDEO_AVCProfileConstrainedHigh,
                             QOMX_VIDEO_AVCProfileHigh };
-    int hevc_profiles[3] = { OMX_VIDEO_HEVCProfileMain,
+    int hevc_profiles[4] = { OMX_VIDEO_HEVCProfileMain,
                              OMX_VIDEO_HEVCProfileMain10HDR10,
-                             OMX_VIDEO_HEVCProfileMainStill };
+                             OMX_VIDEO_HEVCProfileMainStill,
+                             OMX_VIDEO_HEVCProfileMain10 };
 
     if (!profileLevelType)
         return OMX_ErrorBadParameter;
@@ -1658,7 +1660,7 @@ bool venc_dev::venc_open(OMX_U32 codec)
         supported_rc_modes = (RC_ALL & ~RC_CBR_CFR);
     }
 
-    if (!strcmp(m_platform_name, "sm6150") || !strcmp(m_platform_name, "atoll") || !strcmp(m_platform_name, "trinket"))
+    if (!strcmp(m_platform_name, "sm6150") || !strcmp(m_platform_name, "atoll") || !strcmp(m_platform_name, "trinket") || !strcmp(m_platform_name, "msmnile"))
     {
        hdr10metadata_supported = false;
     }
@@ -2492,7 +2494,7 @@ bool venc_dev::venc_set_param(void *paramData, OMX_INDEXTYPE index)
                         }
                     }
 
-                    if(!venc_set_level(OMX_VIDEO_LEVEL_UNKNOWN)) {
+                    if(!venc_set_level(pParam->eLevel)) {
                         DEBUG_PRINT_ERROR("ERROR: Unsuccessful in updating level to unknown");
                         return false;
                     }
@@ -4175,7 +4177,7 @@ bool venc_dev::venc_empty_buf(void *buffer, void *pmem_data_buf, unsigned index,
     struct v4l2_buffer buf;
     struct v4l2_requestbuffers bufreq;
     struct v4l2_plane plane[VIDEO_MAX_PLANES];
-    int rc = 0, extra_idx, c2d_enabled = 0;
+    int rc = 0, extra_idx;
     bool interlace_flag = false;
     struct OMX_BUFFERHEADERTYPE *bufhdr;
     LEGACY_CAM_METADATA_TYPE * meta_buf = NULL;
@@ -4357,6 +4359,16 @@ bool venc_dev::venc_empty_buf(void *buffer, void *pmem_data_buf, unsigned index,
                         DEBUG_PRINT_LOW("gralloc format 0x%x (%s) (%s)",
                             handle->format, grallocFormatStr, isUBWC ? "UBWC" : "Linear");
 
+                        if (m_codec == OMX_VIDEO_CodingHEVC && (handle->format == HAL_PIXEL_FORMAT_YCbCr_420_TP10_UBWC ||
+                            handle->format == HAL_PIXEL_FORMAT_YCbCr_420_P010_VENUS) &&
+                            codec_profile.profile != V4L2_MPEG_VIDC_VIDEO_HEVC_PROFILE_MAIN10)
+                            {
+                                is_hevcprofile_explicitly_set = true;
+                                if (!venc_set_profile (OMX_VIDEO_HEVCProfileMain10)) {
+                                    DEBUG_PRINT_ERROR("ERROR: Unsuccessful in updating Profile OMX_VIDEO_HEVCProfileMain10");
+                                    return false;
+                                }
+                            }
                         if (handle->format == HAL_PIXEL_FORMAT_NV12_ENCODEABLE) {
                             m_sVenc_cfg.inputformat = isUBWC ? V4L2_PIX_FMT_NV12_UBWC : V4L2_PIX_FMT_NV12;
                             DEBUG_PRINT_INFO("ENC_CONFIG: Input Color = NV12 %s", isUBWC ? "UBWC" : "Linear");
@@ -4553,7 +4565,6 @@ bool venc_dev::venc_empty_buf(void *buffer, void *pmem_data_buf, unsigned index,
                 // color_format == 1 ==> RGBA to YUV Color-converted buffer
                 // Buffers color-converted via C2D have 601-Limited color
                 if (!streaming[OUTPUT_PORT]) {
-                    c2d_enabled = 1;
                     DEBUG_PRINT_HIGH("Setting colorspace 601-L for Color-converted buffer");
                     venc_set_colorspace(MSM_VIDC_BT601_6_625, 0 /*range-limited*/,
                             MSM_VIDC_TRANSFER_601_6_525, MSM_VIDC_MATRIX_601_6_525);
@@ -4575,9 +4586,9 @@ bool venc_dev::venc_empty_buf(void *buffer, void *pmem_data_buf, unsigned index,
         }
     }
 
-    if (!streaming[OUTPUT_PORT] && (c2d_enabled ||
+    if (!streaming[OUTPUT_PORT] &&
         (m_sVenc_cfg.inputformat != V4L2_PIX_FMT_NV12_TP10_UBWC &&
-         m_sVenc_cfg.inputformat != V4L2_PIX_FMT_NV12_UBWC))) {
+         m_sVenc_cfg.inputformat != V4L2_PIX_FMT_NV12_UBWC)) {
         if (bframe_implicitly_enabled) {
             DEBUG_PRINT_HIGH("Disabling implicitly enabled B-frames");
             intra_period.num_pframes = nPframes_cache;
@@ -5299,7 +5310,7 @@ bool venc_dev::venc_set_profile(OMX_U32 eProfile)
 
     codec_profile.profile = control.value;
 
-    if (hdr10metadata_supported == true) {
+    if (hdr10metadata_supported == true && (!is_hevcprofile_explicitly_set)) {
         if (venc_set_extradata_hdr10metadata() == false)
         {
             DEBUG_PRINT_ERROR("Failed to set extradata HDR10PLUS_METADATA");
@@ -7272,7 +7283,14 @@ void venc_dev::venc_get_consumer_usage(OMX_U32* usage) {
     /* Initialize to zero & update as per required color format */
     *usage = 0;
 
-    if (hevc && eProfile == (OMX_U32)OMX_VIDEO_HEVCProfileMain10HDR10) {
+#ifndef DISABLE_UBWC
+    /* Configure UBWC as default */
+    *usage |= GRALLOC_USAGE_PRIVATE_ALLOC_UBWC;
+#endif
+
+    if (hevc &&
+       (eProfile == (OMX_U32)OMX_VIDEO_HEVCProfileMain10HDR10 ||
+        eProfile == (OMX_U32)OMX_VIDEO_HEVCProfileMain10)) {
         DEBUG_PRINT_INFO("Setting 10-bit consumer usage bits");
         *usage |= GRALLOC_USAGE_PRIVATE_10BIT_VIDEO;
         if (mUseLinearColorFormat & REQUEST_LINEAR_COLOR_10_BIT) {
